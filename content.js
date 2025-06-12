@@ -5,7 +5,7 @@
     window.snuHasInjected = true;
 
     // A utility to wait for an element to exist before running a callback.
-    const waitForElement = (selector, context, callback) => {
+    const waitForElement = (selector, context, callback, elementDescription = selector) => {
         let retries = 0;
         const interval = setInterval(() => {
             const element = context.querySelector(selector);
@@ -14,7 +14,8 @@
                 callback(element);
             } else if (++retries > 40) { // Approx 20 seconds timeout (40 * 500ms)
                 clearInterval(interval);
-                console.warn(`SN QuickFill: Element "${selector}" not found after ${retries} retries.`);
+                // Use elementDescription in the warning for better context
+                console.warn(`SN QuickFill: Element "${elementDescription}" (selector: ${selector}) not found after ${retries} retries.`);
             }
         }, 500);
     };
@@ -86,14 +87,48 @@
         const applyAllDefaults = () => { chrome.storage.sync.get(Object.values(fieldsConfig).map(c=>c.defaultKey),d=>{const data={caller:d.snu_defaultCaller,category:d.snu_defaultCategory,configurationItem:d.snu_defaultConfigItem,channel:d.snu_defaultChannel,assignmentGroup:d.snu_defaultAssignmentGroup,assignedTo:d.snu_defaultAssignedTo,state:d.snu_defaultState,shortDescription:''};fillServiceNowForm(data);});};
         
         const injectQuickfillButton = () => {
-            waitForElement('.tabs2_strip', getTargetDoc(), (targetArea) => {
-                if (getTargetDoc().getElementById('snu-quickfill-btn')) return;
-                const container=document.createElement('div'); container.id='snu-quickfill-container';
-                const button=document.createElement('button'); button.id='snu-quickfill-btn'; button.type='button'; button.textContent='Quickfill Defaults';
-                button.addEventListener('click', applyAllDefaults);
-                container.appendChild(button);
-                targetArea.parentNode.insertBefore(container, targetArea);
-            });
+            // Wait for the main ServiceNow iframe to be available in the main document
+            waitForElement('#gsft_main', document, (iframeElement) => {
+                console.log("SN QuickFill: Found #gsft_main iframe. Attempting to access its content.", iframeElement);
+                if (iframeElement && iframeElement.contentWindow && iframeElement.contentWindow.document) {
+                    const iframeDoc = iframeElement.contentWindow.document;
+                    console.log("SN QuickFill: iframeDoc obtained. Looking for button container next.", iframeDoc);
+                    // Now, wait for '.tabs2_strip' inside the iframe's document
+                    // Let's target the container for form UI Action buttons instead of '.tabs2_strip'
+                    // !!! YOU MAY NEED TO CHANGE THE SELECTOR BELOW ('div.form_action_button_container') !!!
+                    waitForElement('#cxs_maximize_results', iframeDoc, (actionButtonContainer) => {
+                        // Check if the button already exists within the iframe
+                        if (iframeDoc.getElementById('snu-quickfill-btn')) {
+                            return; // Button already injected
+                        }
+
+                        const container = iframeDoc.createElement('div');
+                        console.log("SN QuickFill: Found actionButtonContainer. Creating button.", actionButtonContainer);
+                        // Style the container to fit in with other buttons if needed, e.g., display: inline-block
+                        container.id = 'snu-quickfill-btn-container'; // Changed ID to be more specific
+                        container.style.display = 'inline-block'; // Helps with alignment
+                        container.style.marginRight = '5px'; // Add some space if prepending
+
+                        const button = iframeDoc.createElement('button');
+                        button.id = 'snu-quickfill-btn';
+                        button.type = 'button';
+                        button.textContent = 'Quickfill Defaults';
+                        // It's good practice to copy classes from existing SN buttons for consistent styling
+                        // For example, if other buttons have 'form_action_button', add it.
+                        // button.classList.add('form_action_button'); // Example: inspect SN buttons for actual classes
+                        button.addEventListener('click', applyAllDefaults);
+
+                        container.appendChild(button);
+
+                        // Prepend the button to the container so it appears with other actions
+                        actionButtonContainer.prepend(container);
+                        console.log("SN QuickFill: 'Quickfill Defaults' button prepended.", container);
+
+                    }, "ServiceNow form action button container (#cxs_maximize_results)");
+                } else {
+                    console.warn("SN QuickFill: gsft_main iframe or its document not available for injecting 'Quickfill Defaults' button.");
+                }
+            }, "main ServiceNow iframe for 'Quickfill Defaults' button injection");
         };
 
         modalContainer.querySelectorAll('[data-field]').forEach(el => {
@@ -132,20 +167,20 @@
         chrome.storage.sync.get('snu_auto_open', (result) => {
             if (result.snu_auto_open) {
                 // Wait for the main ServiceNow iframe to be available in the main document
-                waitForElement('#gsft_main', document, (iframeElement) => {
+                waitForElement('#gsft_main', document, (iframeElement) => { // Added description
                     // Ensure iframeElement and its contentWindow are valid before proceeding
                     if (iframeElement && iframeElement.contentWindow && iframeElement.contentWindow.document) {
                         const iframeDoc = iframeElement.contentWindow.document;
                         // Then, wait for the "New record" header within the iframe.
                         // ServiceNow might take a moment to populate the iframe's content.
-                        waitForElement('h1.form_header div', iframeDoc, (headerDiv) => {
+                        waitForElement('h1.form_header div', iframeDoc, (headerDiv) => { // Added description
                             if (headerDiv && headerDiv.textContent.trim() === "New record") {
                                 const currentModal = document.getElementById('snu-modal-container'); // Re-fetch modal
                                 if (currentModal) {
                                     currentModal.style.display = 'flex';
                                 }
                             }
-                        });
+                        }, "'New Record' header");
                     } else {
                         console.warn("SN QuickFill: gsft_main iframe or its contentWindow is not available for auto-open check.");
                     }
