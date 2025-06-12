@@ -12,8 +12,9 @@
             if (element) {
                 clearInterval(interval);
                 callback(element);
-            } else if (++retries > 40) {
+            } else if (++retries > 40) { // Approx 20 seconds timeout (40 * 500ms)
                 clearInterval(interval);
+                console.warn(`SN QuickFill: Element "${selector}" not found after ${retries} retries.`);
             }
         }, 500);
     };
@@ -45,16 +46,16 @@
             </div>`;
         document.body.insertAdjacentHTML('beforeend', MODAL_HTML);
 
-        const modal = document.getElementById('snu-modal-container');
+        const modalContainer = document.getElementById('snu-modal-container'); // Renamed to avoid conflict in auto-open
         const BLANK_ENTRY = '[Blank]';
         const fieldsConfig = {
-            category: { isStatic: true, select: modal.querySelector('#category-input'), defaultKey: 'snu_defaultCategory', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: '-- None --', value: '' }, { text: 'Request', value: 'request' }, { text: 'Inquiry / Help', value: 'inquiry' }, { text: 'Software', value: 'software' }, { text: 'Hardware', value: 'hardware' }, { text: 'Network', value: 'network' }, { text: 'Database', value: 'database' }, { text: 'Phone', value: 'Phone' }, { text: 'Audio/Visual', value: 'Audio/Visual' }, { text: 'Facilities', value: 'Facilities' } ] },
-            channel: { isStatic: true, select: modal.querySelector('#channel-input'), defaultKey: 'snu_defaultChannel', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: 'Email', value: 'email' }, { text: 'Phone', value: 'phone' }, { text: 'Self-service', value: 'self-service' }, { text: 'Walk-in', value: 'walk-in' } ] },
-            state: { isStatic: true, select: modal.querySelector('#state-input'), defaultKey: 'snu_defaultState', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: 'New', value: '1' }, { text: 'Active', value: '2' }, { text: 'Awaiting Problem', value: '3' }, { text: 'Awaiting User Info', value: '4' }, { text: 'Awaiting Evidence', value: '5' }, { text: 'Resolved', value: '6' } ] },
-            caller: { isStatic: false, input: modal.querySelector('#caller-input'), panel: modal.querySelector('#caller-panel'), storageKey: 'snu_savedCallers', defaultKey: 'snu_defaultCaller' },
-            configurationItem: { isStatic: false, input: modal.querySelector('#config-item-input'), panel: modal.querySelector('#config-item-panel'), storageKey: 'snu_savedConfigItems', defaultKey: 'snu_defaultConfigItem' },
-            assignmentGroup: { isStatic: false, input: modal.querySelector('#assignment-group-input'), panel: modal.querySelector('#assignment-group-panel'), storageKey: 'snu_savedAssignmentGroups', defaultKey: 'snu_defaultAssignmentGroup' },
-            assignedTo: { isStatic: false, input: modal.querySelector('#assigned-to-input'), panel: modal.querySelector('#assigned-to-panel'), storageKey: 'snu_savedAssignedTo', defaultKey: 'snu_defaultAssignedTo' }
+            category: { isStatic: true, select: modalContainer.querySelector('#category-input'), defaultKey: 'snu_defaultCategory', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: '-- None --', value: '' }, { text: 'Request', value: 'request' }, { text: 'Inquiry / Help', value: 'inquiry' }, { text: 'Software', value: 'software' }, { text: 'Hardware', value: 'hardware' }, { text: 'Network', value: 'network' }, { text: 'Database', value: 'database' }, { text: 'Phone', value: 'Phone' }, { text: 'Audio/Visual', value: 'Audio/Visual' }, { text: 'Facilities', value: 'Facilities' } ] },
+            channel: { isStatic: true, select: modalContainer.querySelector('#channel-input'), defaultKey: 'snu_defaultChannel', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: 'Email', value: 'email' }, { text: 'Phone', value: 'phone' }, { text: 'Self-service', value: 'self-service' }, { text: 'Walk-in', value: 'walk-in' } ] },
+            state: { isStatic: true, select: modalContainer.querySelector('#state-input'), defaultKey: 'snu_defaultState', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: 'New', value: '1' }, { text: 'Active', value: '2' }, { text: 'Awaiting Problem', value: '3' }, { text: 'Awaiting User Info', value: '4' }, { text: 'Awaiting Evidence', value: '5' }, { text: 'Resolved', value: '6' } ] },
+            caller: { isStatic: false, input: modalContainer.querySelector('#caller-input'), panel: modalContainer.querySelector('#caller-panel'), storageKey: 'snu_savedCallers', defaultKey: 'snu_defaultCaller' },
+            configurationItem: { isStatic: false, input: modalContainer.querySelector('#config-item-input'), panel: modalContainer.querySelector('#config-item-panel'), storageKey: 'snu_savedConfigItems', defaultKey: 'snu_defaultConfigItem' },
+            assignmentGroup: { isStatic: false, input: modalContainer.querySelector('#assignment-group-input'), panel: modalContainer.querySelector('#assignment-group-panel'), storageKey: 'snu_savedAssignmentGroups', defaultKey: 'snu_defaultAssignmentGroup' },
+            assignedTo: { isStatic: false, input: modalContainer.querySelector('#assigned-to-input'), panel: modalContainer.querySelector('#assigned-to-panel'), storageKey: 'snu_savedAssignedTo', defaultKey: 'snu_defaultAssignedTo' }
         };
 
         const getTargetDoc = () => {
@@ -67,7 +68,7 @@
             const config = fieldsConfig[fieldName]; config.panel.innerHTML='';
             ['[Blank]', ...options].forEach(optionText => { const i=document.createElement('div');i.className='dropdown-item';const t=document.createElement('span');t.textContent=optionText;i.appendChild(t);if(optionText !== '[Blank]'){const r=document.createElement('button');r.className='remove-item-btn';r.innerHTML='&times;';r.title=`Remove "${optionText}"`;r.addEventListener('click',e=>{e.stopPropagation();removeEntry(fieldName,optionText);});i.appendChild(r);} i.addEventListener('click', ()=>{config.input.value=(optionText==='[Blank]')?'':optionText;config.panel.classList.remove('show');}); config.panel.appendChild(i);});
         };
-        const checkIfDefault = (fieldName) => { const config = fieldsConfig[fieldName]; const btn = modal.querySelector(`.default-btn[data-field="${fieldName}"]`); if(!btn) return; const val = config.isStatic ? config.select.value : config.input.value; chrome.storage.sync.get(config.defaultKey, r => { btn.classList.toggle('is-default', r[config.defaultKey] !== undefined && val === r[config.defaultKey] && val !== '' && val !== '[Blank]'); }); };
+        const checkIfDefault = (fieldName) => { const config = fieldsConfig[fieldName]; const btn = modalContainer.querySelector(`.default-btn[data-field="${fieldName}"]`); if(!btn) return; const val = config.isStatic ? config.select.value : config.input.value; chrome.storage.sync.get(config.defaultKey, r => { btn.classList.toggle('is-default', r[config.defaultKey] !== undefined && val === r[config.defaultKey] && val !== '' && val !== '[Blank]'); }); };
         const loadDataForField = (fieldName) => {
             const config = fieldsConfig[fieldName]; chrome.storage.sync.get([config.defaultKey, config.storageKey].filter(Boolean), r => {
                 const defaultVal = r[config.defaultKey]; if(config.isStatic){config.select.innerHTML=''; config.staticOptions.forEach(opt=>{const o=document.createElement('option');o.value=opt.value;o.textContent=opt.text;config.select.appendChild(o);}); config.select.value=defaultVal||'[Blank]';}else{populateDropdown(fieldName,r[config.storageKey]||[]); config.input.value=defaultVal||'';}
@@ -95,7 +96,7 @@
             });
         };
 
-        modal.querySelectorAll('[data-field]').forEach(el => {
+        modalContainer.querySelectorAll('[data-field]').forEach(el => {
             const fn=el.dataset.field; if(!fn||!fieldsConfig[fn])return;
             if(el.classList.contains('plus-btn'))el.addEventListener('click',()=>addEntry(fn));
             if(el.classList.contains('default-btn'))el.addEventListener('click',()=>setDefault(fn));
@@ -104,28 +105,42 @@
             if(el.classList.contains('custom-dropdown-input')){el.addEventListener('input',()=>filterDropdown(fn));el.addEventListener('focus',()=>fieldsConfig[fn].panel.classList.add('show'));}
         });
         
-        modal.querySelector('#snu-close-btn').addEventListener('click',()=>modal.style.display='none');
-        modal.querySelector('#snu-fill-btn').addEventListener('click',()=>{const d={};for(const fn in fieldsConfig)d[fn]=fieldsConfig[fn].isStatic?fieldsConfig[fn].select.value:fieldsConfig[fn].input.value;d.shortDescription=modal.querySelector('#short-description-input').value;fillServiceNowForm(d);modal.style.display='none';});
-        const autoToggle=modal.querySelector('#snu-auto-open-toggle');
+        modalContainer.querySelector('#snu-close-btn').addEventListener('click',()=>modalContainer.style.display='none');
+        modalContainer.querySelector('#snu-fill-btn').addEventListener('click',()=>{const d={};for(const fn in fieldsConfig)d[fn]=fieldsConfig[fn].isStatic?fieldsConfig[fn].select.value:fieldsConfig[fn].input.value;d.shortDescription=modalContainer.querySelector('#short-description-input').value;fillServiceNowForm(d);modalContainer.style.display='none';});
+        const autoToggle=modalContainer.querySelector('#snu-auto-open-toggle');
         autoToggle.addEventListener('change',e=>chrome.storage.sync.set({'snu_auto_open':e.target.checked}));
         chrome.storage.sync.get('snu_auto_open',r=>autoToggle.checked=!!r.snu_auto_open);
         
-        // This listener now correctly closes dropdowns because the modal exists in the main document.
-        window.addEventListener('click',e=>{if(!e.target.closest('#snu-modal-content')) modal.querySelectorAll('.dropdown-panel.show').forEach(p=>p.classList.remove('show'));});
+        window.addEventListener('click',e=>{if(!e.target.closest('#snu-modal-content')) modalContainer.querySelectorAll('.dropdown-panel.show').forEach(p=>p.classList.remove('show'));});
         
         for (const fieldName in fieldsConfig) { loadDataForField(fieldName); }
         injectQuickfillButton();
 
-        const isNewRecordPage = () => {
-            const headerDiv = getTargetDoc().querySelector("h1.form_header div");
-            return headerDiv && headerDiv.textContent.trim() === "New record";
-        };
-        
-        chrome.storage.sync.get('snu_auto_open', r => {
-            if(r.snu_auto_open && isNewRecordPage()){
-                 modal.style.display = 'flex';
+        // --- MODIFIED AUTO-OPEN LOGIC ---
+        chrome.storage.sync.get('snu_auto_open', (result) => {
+            if (result.snu_auto_open) {
+                // Wait for the main ServiceNow iframe to be available in the main document
+                waitForElement('#gsft_main', document, (iframeElement) => {
+                    // Ensure iframeElement and its contentWindow are valid before proceeding
+                    if (iframeElement && iframeElement.contentWindow && iframeElement.contentWindow.document) {
+                        const iframeDoc = iframeElement.contentWindow.document;
+                        // Then, wait for the "New record" header within the iframe.
+                        // ServiceNow might take a moment to populate the iframe's content.
+                        waitForElement('h1.form_header div', iframeDoc, (headerDiv) => {
+                            if (headerDiv && headerDiv.textContent.trim() === "New record") {
+                                const currentModal = document.getElementById('snu-modal-container'); // Re-fetch modal
+                                if (currentModal) {
+                                    currentModal.style.display = 'flex';
+                                }
+                            }
+                        });
+                    } else {
+                        console.warn("SN QuickFill: gsft_main iframe or its contentWindow is not available for auto-open check.");
+                    }
+                });
             }
         });
+        // --- END OF MODIFIED AUTO-OPEN LOGIC ---
     };
 
     // --- SCRIPT ENTRY POINT ---
