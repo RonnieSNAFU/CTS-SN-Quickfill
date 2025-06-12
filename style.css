@@ -1,0 +1,41 @@
+#snu-modal-container { position: fixed; z-index: 100000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; font-family: sans-serif; }
+#snu-modal-content { background-color: #fefefe; padding: 20px 25px; border: 1px solid #888; border-radius: 8px; width: 700px; max-height: 90vh; overflow-y: auto; position: relative; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+#snu-close-btn { position: absolute; top: 10px; right: 15px; color: #aaa; font-size: 28px; font-weight: bold; border: none; background: none; cursor: pointer; }
+#snu-close-btn:hover { color: black; }
+.snu-header { text-align: center; margin-bottom: 20px; }
+.snu-header h2 { font-size: 18px; margin: 0; color: #333; }
+.snu-header .snu-subtitle { font-size: 11px; color: #666; margin: 2px 0 0 0; }
+.snu-top-controls { position: absolute; top: 15px; left: 15px; display: flex; align-items: center; }
+.snu-switch { position: relative; display: inline-block; width: 34px; height: 20px; }
+.snu-switch input { opacity: 0; width: 0; height: 0; }
+.snu-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+.snu-slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+input:checked + .snu-slider { background-color: #2196F3; }
+input:checked + .snu-slider:before { transform: translateX(14px); }
+.snu-slider.round { border-radius: 20px; }
+.snu-slider.round:before { border-radius: 50%; }
+.snu-switch-label { margin-left: 8px; font-size: 12px; color: #555; user-select: none; }
+#snu-two-column-layout { display: flex; gap: 25px; margin-top: 30px; }
+.snu-column { flex: 1; display: flex; flex-direction: column; }
+.field-group { margin-bottom: 20px; }
+label { font-weight: bold; font-size: 14px; margin-bottom: 5px; display: block; }
+select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box; }
+.button-row { margin-top: 5px; }
+.plus-btn { margin-right: 5px; padding: 5px 10px; font-weight: bold; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; }
+.default-btn { font-size: 10px; padding: 3px 8px; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background-color: #f0f0f0; }
+#snu-fill-btn { width: 100%; padding: 12px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+#snu-fill-btn:hover { background-color: #218838; }
+.custom-dropdown-container { position: relative; }
+.input-wrapper { display: flex; }
+.custom-dropdown-input { width: 100%; border: 1px solid #ccc; padding: 8px; border-radius: 4px 0 0 4px; border-right: none; }
+.dropdown-arrow { flex-shrink: 0; cursor: pointer; border: 1px solid #ccc; background-color: #eee; border-radius: 0 4px 4px 0; padding: 0 10px; font-size: 10px; }
+.dropdown-panel { display: none; position: absolute; background-color: #fff; width: 100%; border: 1px solid #ccc; border-top: none; z-index: 100000; max-height: 150px; overflow-y: auto; }
+.dropdown-panel.show { display: block; }
+.dropdown-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; cursor: pointer; }
+.dropdown-item:hover { background-color: #007bff; color: white; }
+.remove-item-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 14px; font-weight: bold; padding: 2px 6px; border-radius: 50%; }
+.remove-item-btn:hover { background-color: #e0e0e0; color: #333; }
+.default-btn.is-default { background-color: #007bff; color: white; border-color: #0056b3; }
+#snu-quickfill-container { padding: 5px 20px 15px; border-top: 1px solid #ccc; margin-top: 10px; text-align: right; }
+#snu-quickfill-btn { background-color: #28a745; color: white; border: none; border-radius: 4px; padding: 10px 15px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+#snu-quickfill-btn:hover { background-color: #218838; }
