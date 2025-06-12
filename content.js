@@ -5,17 +5,19 @@
     window.snuHasInjected = true;
 
     // A utility to wait for an element to exist before running a callback.
-    const waitForElement = (selector, context, callback, elementDescription = selector) => {
+    const waitForElement = (selector, context, callback, elementDescription = selector, suppressTimeoutWarning = false) => {
         let retries = 0;
+        const MAX_RETRIES = 40; // Approx 20 seconds timeout (40 * 500ms)
         const interval = setInterval(() => {
             const element = context.querySelector(selector);
             if (element) {
                 clearInterval(interval);
                 callback(element);
-            } else if (++retries > 40) { // Approx 20 seconds timeout (40 * 500ms)
+            } else if (++retries > MAX_RETRIES) {
                 clearInterval(interval);
-                // Use elementDescription in the warning for better context
-                console.warn(`SN QuickFill: Element "${elementDescription}" (selector: ${selector}) not found after ${retries} retries.`);
+                if (!suppressTimeoutWarning) { // Only warn if not suppressed
+                    console.warn(`SN QuickFill: Element "${elementDescription}" (selector: ${selector}) not found after ${retries} retries.`);
+                }
             }
         }, 500);
     };
@@ -86,49 +88,45 @@
         };
         const applyAllDefaults = () => { chrome.storage.sync.get(Object.values(fieldsConfig).map(c=>c.defaultKey),d=>{const data={caller:d.snu_defaultCaller,category:d.snu_defaultCategory,configurationItem:d.snu_defaultConfigItem,channel:d.snu_defaultChannel,assignmentGroup:d.snu_defaultAssignmentGroup,assignedTo:d.snu_defaultAssignedTo,state:d.snu_defaultState,shortDescription:''};fillServiceNowForm(data);});};
         
+        // Creates and injects the "Quickfill Defaults" button into a given anchor element.
+        const injectButtonElements = (iframeDoc, anchorElement) => {
+            if (iframeDoc.getElementById('snu-quickfill-btn')) {
+                return; // Button already injected
+            }
+            console.log("SN QuickFill: Injecting 'Quickfill Defaults' button logic.");
+            const container = iframeDoc.createElement('div');
+            container.id = 'snu-quickfill-btn-container';
+            container.style.display = 'inline-block';
+            container.style.marginRight = '5px';
+
+            const button = iframeDoc.createElement('button');
+            button.id = 'snu-quickfill-btn';
+            button.type = 'button';
+            button.textContent = 'Quickfill Defaults';
+            // Consider adding ServiceNow's button classes for consistent styling
+            // e.g., button.classList.add('form_action_button', 'header');
+            button.addEventListener('click', applyAllDefaults);
+
+            container.appendChild(button);
+            anchorElement.prepend(container);
+            console.log("SN QuickFill: 'Quickfill Defaults' button injected.", container);
+        };
+
+        // Tries to find the anchor point and inject the on-page button.
+        const tryInjectOnPageButton = (currentIframeDoc) => {
+            if (!currentIframeDoc) return;
+            waitForElement(
+                '#cxs_maximize_results', // User-confirmed selector for the button's anchor
+                currentIframeDoc,
+                (actionButtonContainer) => injectButtonElements(currentIframeDoc, actionButtonContainer),
+                "On-page button anchor (#cxs_maximize_results)",
+                true // Suppress warning for repeated checks by observers
+            );
+        };
+
         const injectQuickfillButton = () => {
-            // Wait for the main ServiceNow iframe to be available in the main document
-            waitForElement('#gsft_main', document, (iframeElement) => {
-                console.log("SN QuickFill: Found #gsft_main iframe. Attempting to access its content.", iframeElement);
-                if (iframeElement && iframeElement.contentWindow && iframeElement.contentWindow.document) {
-                    const iframeDoc = iframeElement.contentWindow.document;
-                    console.log("SN QuickFill: iframeDoc obtained. Looking for button container next.", iframeDoc);
-                    // Now, wait for '.tabs2_strip' inside the iframe's document
-                    // Let's target the container for form UI Action buttons instead of '.tabs2_strip'
-                    // !!! YOU MAY NEED TO CHANGE THE SELECTOR BELOW ('div.form_action_button_container') !!!
-                    waitForElement('#cxs_maximize_results', iframeDoc, (actionButtonContainer) => {
-                        // Check if the button already exists within the iframe
-                        if (iframeDoc.getElementById('snu-quickfill-btn')) {
-                            return; // Button already injected
-                        }
-
-                        const container = iframeDoc.createElement('div');
-                        console.log("SN QuickFill: Found actionButtonContainer. Creating button.", actionButtonContainer);
-                        // Style the container to fit in with other buttons if needed, e.g., display: inline-block
-                        container.id = 'snu-quickfill-btn-container'; // Changed ID to be more specific
-                        container.style.display = 'inline-block'; // Helps with alignment
-                        container.style.marginRight = '5px'; // Add some space if prepending
-
-                        const button = iframeDoc.createElement('button');
-                        button.id = 'snu-quickfill-btn';
-                        button.type = 'button';
-                        button.textContent = 'Quickfill Defaults';
-                        // It's good practice to copy classes from existing SN buttons for consistent styling
-                        // For example, if other buttons have 'form_action_button', add it.
-                        // button.classList.add('form_action_button'); // Example: inspect SN buttons for actual classes
-                        button.addEventListener('click', applyAllDefaults);
-
-                        container.appendChild(button);
-
-                        // Prepend the button to the container so it appears with other actions
-                        actionButtonContainer.prepend(container);
-                        console.log("SN QuickFill: 'Quickfill Defaults' button prepended.", container);
-
-                    }, "ServiceNow form action button container (#cxs_maximize_results)");
-                } else {
-                    console.warn("SN QuickFill: gsft_main iframe or its document not available for injecting 'Quickfill Defaults' button.");
-                }
-            }, "main ServiceNow iframe for 'Quickfill Defaults' button injection");
+            // Initial call to inject the button
+            // This will be handled by the iframe monitoring logic once the iframe is ready.
         };
 
         modalContainer.querySelectorAll('[data-field]').forEach(el => {
@@ -163,31 +161,102 @@
         for (const fieldName in fieldsConfig) { loadDataForField(fieldName); }
         injectQuickfillButton();
 
-        // --- MODIFIED AUTO-OPEN LOGIC ---
-        chrome.storage.sync.get('snu_auto_open', (result) => {
-            if (result.snu_auto_open) {
-                // Wait for the main ServiceNow iframe to be available in the main document
-                waitForElement('#gsft_main', document, (iframeElement) => { // Added description
-                    // Ensure iframeElement and its contentWindow are valid before proceeding
-                    if (iframeElement && iframeElement.contentWindow && iframeElement.contentWindow.document) {
-                        const iframeDoc = iframeElement.contentWindow.document;
-                        // Then, wait for the "New record" header within the iframe.
-                        // ServiceNow might take a moment to populate the iframe's content.
-                        waitForElement('h1.form_header div', iframeDoc, (headerDiv) => { // Added description
-                            if (headerDiv && headerDiv.textContent.trim() === "New record") {
-                                const currentModal = document.getElementById('snu-modal-container'); // Re-fetch modal
-                                if (currentModal) {
-                                    currentModal.style.display = 'flex';
-                                }
-                            }
-                        }, "'New Record' header");
-                    } else {
-                        console.warn("SN QuickFill: gsft_main iframe or its contentWindow is not available for auto-open check.");
+        // --- IFRAME MONITORING (LOAD EVENTS AND MUTATIONS) ---
+        let iframeObserver = null; 
+
+        const processIframeContent = (currentIframeDoc) => {
+            if (!currentIframeDoc) {
+                console.warn("SN QuickFill: processIframeContent called with no document.");
+                return;
+            }
+            console.log("SN QuickFill: Processing iframe content.");
+            checkForNewRecordAndOpen(currentIframeDoc);
+            tryInjectOnPageButton(currentIframeDoc);
+        };
+
+            const checkForNewRecordAndOpen = (currentIframeDoc) => {
+                // Don't show modal if the document/tab is not focused
+                if (!document.hasFocus()) {
+                    // console.log("SN QuickFill: Auto-open check - Document does not have focus, skipping modal display.");
+                    return;
+                }
+
+                chrome.storage.sync.get('snu_auto_open', (settingResult) => {
+                    if (!settingResult.snu_auto_open) {
+                        // console.log("SN QuickFill: Auto-open check - Setting is OFF.");
+                        return;
                     }
+                    // console.log("SN QuickFill: Auto-open check - Setting is ON.");
+
+                    const modal = document.getElementById('snu-modal-container');
+                    if (modal && modal.style.display === 'flex') {
+                        // console.log("SN QuickFill: Auto-open check - Modal already open, skipping.");
+                        return;
+                    }
+
+                    waitForElement('h1.form_header div', currentIframeDoc, (headerDiv) => {
+                        const headerText = headerDiv ? headerDiv.textContent.trim().toLowerCase() : "";
+                        if (headerText === "new record") {
+                            console.log("SN QuickFill: Auto-open check - 'New Record' text matched. Opening modal.");
+                            if (modal) modal.style.display = 'flex';
+                        } else {
+                            // console.log(`SN QuickFill: Auto-open check - 'New Record' text did NOT match. Found: "${headerText}"`);
+                        }
+                    }, "'New Record' header (mutation check)", true);
                 });
+            };
+
+        waitForElement('#gsft_main', document, (iframeElement) => {
+            console.log("SN QuickFill: Monitoring - Found #gsft_main iframe.", iframeElement);
+
+            const setupMutationObserver = (docToObserve) => {
+                if (!docToObserve) return;
+                waitForElement('body', docToObserve, (iframeBody) => {
+                    if (iframeObserver) {
+                        iframeObserver.disconnect();
+                        console.log("SN QuickFill: Disconnected old MutationObserver.");
+                    }
+                    iframeObserver = new MutationObserver(() => {
+                        // console.log("SN QuickFill: iframe body mutation detected.");
+                        // Get the latest document reference from the iframe contentWindow
+                        const latestIframeDoc = iframeElement.contentWindow ? iframeElement.contentWindow.document : null;
+                        if (latestIframeDoc) {
+                            processIframeContent(latestIframeDoc);
+                        }
+                    });
+                    iframeObserver.observe(iframeBody, { childList: true, subtree: true });
+                    console.log("SN QuickFill: MutationObserver attached to iframe body.");
+                }, "iframe body for MutationObserver", true);
+            };
+
+            // Initial processing when iframe is first found
+            if (iframeElement.contentWindow && iframeElement.contentWindow.document) {
+                const initialIframeDoc = iframeElement.contentWindow.document;
+                processIframeContent(initialIframeDoc);
+                setupMutationObserver(initialIframeDoc);
+            } else {
+                console.log("SN QuickFill: iframe document not immediately ready on find, will wait for 'load' event.");
+            }
+
+            // Listen for iframe 'load' events (covers navigation that changes src)
+            iframeElement.addEventListener('load', () => {
+                console.log("SN QuickFill: iframe 'load' event detected.");
+                const loadedIframeDoc = iframeElement.contentWindow ? iframeElement.contentWindow.document : null;
+                if (loadedIframeDoc) {
+                    processIframeContent(loadedIframeDoc);
+                    setupMutationObserver(loadedIframeDoc); // Re-setup observer on new document's body
+                }
+            });
+
+        }, "main ServiceNow iframe for monitoring");
+        
+        window.addEventListener('beforeunload', () => {
+            if (iframeObserver) { // Check the observer declared in the outer scope
+                console.log("SN QuickFill: Window unloading. Disconnecting any active iframe observer.");
+                iframeObserver.disconnect();
+                iframeObserver = null;
             }
         });
-        // --- END OF MODIFIED AUTO-OPEN LOGIC ---
     };
 
     // --- SCRIPT ENTRY POINT ---
