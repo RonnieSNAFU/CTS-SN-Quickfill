@@ -34,10 +34,10 @@
                             <div class="field-group"><label for="state-input">State</label><select id="state-input" data-field="state"></select><button data-field="state" class="default-btn">Set as Default</button></div>
                         </div>
                         <div class="snu-column">
-                            <div class="field-group"><label for="caller-input">Caller</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="caller-input" data-field="caller" class="custom-dropdown-input" placeholder="Type or select a caller..."><button class="dropdown-arrow" data-field="caller">&#9660;</button></div><div class="dropdown-panel" id="caller-panel"></div></div><div class="button-row"><button data-field="caller" class="plus-btn" title="Save this entry">+</button><button data-field="caller" class="default-btn">Set as Default</button></div></div>
-                            <div class="field-group"><label for="config-item-input">Configuration Item</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="config-item-input" data-field="configurationItem" class="custom-dropdown-input" placeholder="Type or select an item..."><button class="dropdown-arrow" data-field="configurationItem">&#9660;</button></div><div class="dropdown-panel" id="config-item-panel"></div></div><div class="button-row"><button data-field="configurationItem" class="plus-btn" title="Save this entry">+</button><button data-field="configurationItem" class="default-btn">Set as Default</button></div></div>
-                            <div class="field-group"><label for="assignment-group-input">Assignment Group</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="assignment-group-input" data-field="assignmentGroup" class="custom-dropdown-input" placeholder="Type or select a group..."><button class="dropdown-arrow" data-field="assignmentGroup">&#9660;</button></div><div class="dropdown-panel" id="assignment-group-panel"></div></div><div class="button-row"><button data-field="assignmentGroup" class="plus-btn" title="Save this entry">+</button><button data-field="assignmentGroup" class="default-btn">Set as Default</button></div></div>
-                            <div class="field-group"><label for="assigned-to-input">Assigned To</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="assigned-to-input" data-field="assignedTo" class="custom-dropdown-input" placeholder="Type or select a user..."><button class="dropdown-arrow" data-field="assignedTo">&#9660;</button></div><div class="dropdown-panel" id="assigned-to-panel"></div></div><div class="button-row"><button data-field="assignedTo" class="plus-btn" title="Save this entry">+</button><button data-field="assignedTo" class="default-btn">Set as Default</button></div></div>
+                            <div class="field-group"><label for="caller-input">Caller</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="caller-input" data-field="caller" class="custom-dropdown-input" placeholder="Type or select a caller..." autocomplete="off"><button class="dropdown-arrow" data-field="caller">&#9660;</button></div><div class="dropdown-panel" id="caller-panel"></div></div><div class="button-row"><button data-field="caller" class="plus-btn" title="Save this entry">+</button><button data-field="caller" class="default-btn">Set as Default</button></div></div>
+                            <div class="field-group"><label for="config-item-input">Configuration Item</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="config-item-input" data-field="configurationItem" class="custom-dropdown-input" placeholder="Type or select an item..." autocomplete="off"><button class="dropdown-arrow" data-field="configurationItem">&#9660;</button></div><div class="dropdown-panel" id="config-item-panel"></div></div><div class="button-row"><button data-field="configurationItem" class="plus-btn" title="Save this entry">+</button><button data-field="configurationItem" class="default-btn">Set as Default</button></div></div>
+                            <div class="field-group"><label for="assignment-group-input">Assignment Group</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="assignment-group-input" data-field="assignmentGroup" class="custom-dropdown-input" placeholder="Type or select a group..." autocomplete="off"><button class="dropdown-arrow" data-field="assignmentGroup">&#9660;</button></div><div class="dropdown-panel" id="assignment-group-panel"></div></div><div class="button-row"><button data-field="assignmentGroup" class="plus-btn" title="Save this entry">+</button><button data-field="assignmentGroup" class="default-btn">Set as Default</button></div></div>
+                            <div class="field-group"><label for="assigned-to-input">Assigned To</label><div class="custom-dropdown-container"><div class="input-wrapper"><input type="text" id="assigned-to-input" data-field="assignedTo" class="custom-dropdown-input" placeholder="Type or select a user..." autocomplete="off"><button class="dropdown-arrow" data-field="assignedTo">&#9660;</button></div><div class="dropdown-panel" id="assigned-to-panel"></div></div><div class="button-row"><button data-field="assignedTo" class="plus-btn" title="Save this entry">+</button><button data-field="assignedTo" class="default-btn">Set as Default</button></div></div>
                         </div>
                     </div>
                     <div class="field-group full-width"><label for="short-description-input">Short Description</label><textarea id="short-description-input" rows="3" placeholder="Enter a brief summary..."></textarea></div>
@@ -111,8 +111,20 @@
         autoToggle.addEventListener('change',e=>chrome.storage.sync.set({'snu_auto_open':e.target.checked}));
         chrome.storage.sync.get('snu_auto_open',r=>autoToggle.checked=!!r.snu_auto_open);
         
-        window.addEventListener('click',e=>{if(!e.target.closest('#snu-modal-content')) modalContainer.querySelectorAll('.dropdown-panel.show').forEach(p=>p.classList.remove('show'));});
-        
+        // Close dropdowns when clicking elsewhere
+        window.addEventListener('click', (event) => {
+            // Iterate over all custom dropdown panels that are currently shown
+            const openDropdownPanels = modalContainer.querySelectorAll('.dropdown-panel.show');
+            openDropdownPanels.forEach(panel => {
+                // Find the encompassing container for this specific dropdown
+                const dropdownContainer = panel.closest('.custom-dropdown-container');
+                // If the click was outside this specific dropdown's container, close the panel
+                if (dropdownContainer && !dropdownContainer.contains(event.target)) {
+                    panel.classList.remove('show');
+                }
+            });
+        });
+
         for (const fieldName in fieldsConfig) { loadDataForField(fieldName); }
         injectQuickfillButton();
 
