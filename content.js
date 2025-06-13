@@ -24,6 +24,9 @@
 
     // The main setup function. It will be called only once the page is ready.
     const main = () => {
+        let isApplyingDefaults = false; // Flag to prevent auto-open during form fill
+        let modalWasManuallyClosed = false; // Flag to prevent re-open after manual X close
+
         const MODAL_HTML = `
             <div id="snu-modal-container" style="display: none;">
                 <div id="snu-modal-content">
@@ -87,7 +90,20 @@
             for(const id in idMap){const v=idMap[id];if(v==='[Blank]'||v===undefined||v===null)continue;const el=targetDoc.getElementById(id);if(el){el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));}}
         };
         const applyAllDefaults = () => { chrome.storage.sync.get(Object.values(fieldsConfig).map(c=>c.defaultKey),d=>{const data={caller:d.snu_defaultCaller,category:d.snu_defaultCategory,configurationItem:d.snu_defaultConfigItem,channel:d.snu_defaultChannel,assignmentGroup:d.snu_defaultAssignmentGroup,assignedTo:d.snu_defaultAssignedTo,state:d.snu_defaultState,shortDescription:''};fillServiceNowForm(data);});};
-        
+        const newApplyAllDefaults = () => { // Renamed to avoid conflict if old one is still referenced
+            console.log("SN QuickFill: applyAllDefaults called. Setting isApplyingDefaults=true.");
+            isApplyingDefaults = true;
+            chrome.storage.sync.get(Object.values(fieldsConfig).map(c => c.defaultKey), defaults => {
+                const data = { caller: defaults.snu_defaultCaller, category: defaults.snu_defaultCategory, configurationItem: defaults.snu_defaultConfigItem, channel: defaults.snu_defaultChannel, assignmentGroup: defaults.snu_defaultAssignmentGroup, assignedTo: defaults.snu_defaultAssignedTo, state: defaults.snu_defaultState, shortDescription: '' };
+                console.log("SN QuickFill: applyAllDefaults - got defaults, calling fillServiceNowForm.");
+                fillServiceNowForm(data);
+                console.log("SN QuickFill: applyAllDefaults - fillServiceNowForm finished. Scheduling flag reset.");
+                setTimeout(() => {
+                    console.log("SN QuickFill: applyAllDefaults - Resetting isApplyingDefaults=false.");
+                    isApplyingDefaults = false;
+                }, 750); // Further increased timeout
+            });
+        };
         // Creates and injects the "Quickfill Defaults" button into a given anchor element.
         const injectButtonElements = (iframeDoc, anchorElement) => {
             if (iframeDoc.getElementById('snu-quickfill-btn')) {
@@ -103,13 +119,21 @@
             button.id = 'snu-quickfill-btn';
             button.type = 'button';
             button.textContent = 'Quickfill Defaults';
+            button.style.setProperty('background-color', '#4CAF50', 'important');
+            button.style.setProperty('color', 'white', 'important');
+            button.style.setProperty('border', 'none', 'important'); // Making border !important too
             // Consider adding ServiceNow's button classes for consistent styling
             // e.g., button.classList.add('form_action_button', 'header');
-            button.addEventListener('click', applyAllDefaults);
+            button.addEventListener('click', newApplyAllDefaults); // Use the new version with flag logic
 
             container.appendChild(button);
-            anchorElement.prepend(container);
-            console.log("SN QuickFill: 'Quickfill Defaults' button injected.", container);
+            // Insert the container with your button *before* the anchorElement
+            if (anchorElement.parentNode) {
+                anchorElement.parentNode.insertBefore(container, anchorElement);
+                console.log("SN QuickFill: 'Quickfill Defaults' button injected before anchor element.", container);
+            } else {
+                console.warn("SN QuickFill: Anchor element for 'Quickfill Defaults' button has no parent. Button not injected.");
+            }
         };
 
         // Tries to find the anchor point and inject the on-page button.
@@ -138,8 +162,27 @@
             if(el.classList.contains('custom-dropdown-input')){el.addEventListener('input',()=>filterDropdown(fn));el.addEventListener('focus',()=>fieldsConfig[fn].panel.classList.add('show'));}
         });
         
-        modalContainer.querySelector('#snu-close-btn').addEventListener('click',()=>modalContainer.style.display='none');
-        modalContainer.querySelector('#snu-fill-btn').addEventListener('click',()=>{const d={};for(const fn in fieldsConfig)d[fn]=fieldsConfig[fn].isStatic?fieldsConfig[fn].select.value:fieldsConfig[fn].input.value;d.shortDescription=modalContainer.querySelector('#short-description-input').value;fillServiceNowForm(d);modalContainer.style.display='none';});
+        modalContainer.querySelector('#snu-close-btn').addEventListener('click',()=>{
+            modalContainer.style.display='none';
+            modalWasManuallyClosed = true; // Set flag when X is clicked
+            console.log("SN QuickFill: Modal closed with X. modalWasManuallyClosed=true");
+        });
+        modalContainer.querySelector('#snu-fill-btn').addEventListener('click', () => {
+            console.log("SN QuickFill: Fill & Close clicked. Setting isApplyingDefaults=true.");
+            isApplyingDefaults = true;
+            const dataToFill = {};
+            for (const fieldName in fieldsConfig) dataToFill[fieldName] = fieldsConfig[fieldName].isStatic ? fieldsConfig[fieldName].select.value : fieldsConfig[fieldName].input.value;
+            dataToFill.shortDescription = modalContainer.querySelector('#short-description-input').value;
+            fillServiceNowForm(dataToFill);
+            modalContainer.style.display = 'none';
+            modalWasManuallyClosed = true; // Treat "Fill & Close" like a manual close for re-open prevention
+            console.log("SN QuickFill: Fill & Close - Modal hidden. modalWasManuallyClosed=true");
+            console.log("SN QuickFill: Fill & Close - fillServiceNowForm finished. Scheduling flag reset.");
+            setTimeout(() => {
+                console.log("SN QuickFill: Fill & Close - Resetting isApplyingDefaults=false.");
+                isApplyingDefaults = false;
+            }, 750); // Further increased timeout
+        });
         const autoToggle=modalContainer.querySelector('#snu-auto-open-toggle');
         autoToggle.addEventListener('change',e=>chrome.storage.sync.set({'snu_auto_open':e.target.checked}));
         chrome.storage.sync.get('snu_auto_open',r=>autoToggle.checked=!!r.snu_auto_open);
@@ -175,34 +218,54 @@
         };
 
             const checkForNewRecordAndOpen = (currentIframeDoc) => {
-                // Don't show modal if the document/tab is not focused
-                if (!document.hasFocus()) {
-                    // console.log("SN QuickFill: Auto-open check - Document does not have focus, skipping modal display.");
+                if (modalWasManuallyClosed) {
+                    console.log("SN QuickFill: checkForNewRecordAndOpen - modalWasManuallyClosed is TRUE. Skipping modal open logic.");
+                    // We don't reset it here; it gets reset on iframe load or when modal is programmatically opened.
                     return;
                 }
 
+                if (isApplyingDefaults) {
+                    console.log("SN QuickFill: checkForNewRecordAndOpen - isApplyingDefaults is TRUE. Skipping modal open logic.");
+                    return;
+                }
+                // console.log("SN QuickFill: checkForNewRecordAndOpen - isApplyingDefaults is FALSE. Proceeding.");
+
+                // Don't show modal if the document/tab is not focused
+                if (!document.hasFocus()) {
+                    // console.log("SN QuickFill: checkForNewRecordAndOpen - Document does not have focus, skipping modal display.");
+                    return;
+                }
+                // console.log("SN QuickFill: checkForNewRecordAndOpen - Document has focus.");
+
                 chrome.storage.sync.get('snu_auto_open', (settingResult) => {
+                    const autoOpenEnabled = !!settingResult.snu_auto_open;
+                    // console.log(`SN QuickFill: checkForNewRecordAndOpen - Auto-open setting is: ${autoOpenEnabled}`);
                     if (!settingResult.snu_auto_open) {
-                        // console.log("SN QuickFill: Auto-open check - Setting is OFF.");
                         return;
                     }
-                    // console.log("SN QuickFill: Auto-open check - Setting is ON.");
 
                     const modal = document.getElementById('snu-modal-container');
                     if (modal && modal.style.display === 'flex') {
-                        // console.log("SN QuickFill: Auto-open check - Modal already open, skipping.");
+                        // console.log("SN QuickFill: checkForNewRecordAndOpen - Modal already open, skipping.");
                         return;
                     }
+                    // console.log("SN QuickFill: checkForNewRecordAndOpen - Modal is not already open.");
 
                     waitForElement('h1.form_header div', currentIframeDoc, (headerDiv) => {
                         const headerText = headerDiv ? headerDiv.textContent.trim().toLowerCase() : "";
+                        // console.log(`SN QuickFill: checkForNewRecordAndOpen - Found header text: "${headerText}"`);
                         if (headerText === "new record") {
-                            console.log("SN QuickFill: Auto-open check - 'New Record' text matched. Opening modal.");
-                            if (modal) modal.style.display = 'flex';
+                            console.log("SN QuickFill: checkForNewRecordAndOpen - 'New Record' text matched. Conditions met. Opening modal.");
+                            if (modal) {
+                                modal.style.display = 'flex';
+                                modalWasManuallyClosed = false; // Reset flag as modal is now programmatically opened
+                            } else {
+                                console.error("SN QuickFill: checkForNewRecordAndOpen - Modal element not found when trying to open!");
+                            }
                         } else {
-                            // console.log(`SN QuickFill: Auto-open check - 'New Record' text did NOT match. Found: "${headerText}"`);
+                            // console.log("SN QuickFill: checkForNewRecordAndOpen - 'New Record' text did NOT match.");
                         }
-                    }, "'New Record' header (mutation check)", true);
+                    }, "'New Record' header (check for auto-open)", true);
                 });
             };
 
@@ -244,6 +307,8 @@
                 const loadedIframeDoc = iframeElement.contentWindow ? iframeElement.contentWindow.document : null;
                 if (loadedIframeDoc) {
                     processIframeContent(loadedIframeDoc);
+                    modalWasManuallyClosed = false; // Reset flag on iframe load
+                    console.log("SN QuickFill: iframe 'load' event. modalWasManuallyClosed reset to false.");
                     setupMutationObserver(loadedIframeDoc); // Re-setup observer on new document's body
                 }
             });
