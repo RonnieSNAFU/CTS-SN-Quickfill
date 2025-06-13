@@ -237,7 +237,27 @@
                 }
                 // console.log("SN QuickFill: checkForNewRecordAndOpen - Document has focus.");
 
+                // More explicit and detailed guard against chrome.storage.sync being unavailable
+                if (typeof chrome === 'undefined') {
+                    console.warn("SN QuickFill: 'chrome' object is undefined. Cannot access storage. Skipping auto-open check.");
+                    return;
+                }
+                if (typeof chrome.storage === 'undefined') {
+                    console.warn("SN QuickFill: 'chrome.storage' is undefined. Cannot access storage.sync. Skipping auto-open check.");
+                    return;
+                }
+                if (typeof chrome.storage.sync === 'undefined') {
+                    console.warn("SN QuickFill: 'chrome.storage.sync' is undefined. Skipping auto-open check.");
+                    return;
+                }
+
                 chrome.storage.sync.get('snu_auto_open', (settingResult) => {
+                    // It's crucial to check chrome.runtime.lastError within callbacks from chrome.* APIs
+                    if (chrome.runtime.lastError) {
+                        console.warn("SN QuickFill: Error during chrome.storage.sync.get('snu_auto_open'):", chrome.runtime.lastError.message);
+                        return; // Don't proceed if the storage call itself failed
+                    }
+
                     const autoOpenEnabled = !!settingResult.snu_auto_open;
                     // console.log(`SN QuickFill: checkForNewRecordAndOpen - Auto-open setting is: ${autoOpenEnabled}`);
                     if (!settingResult.snu_auto_open) {
