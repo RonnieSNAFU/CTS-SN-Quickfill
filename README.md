@@ -1,1 +1,1 @@
-https://chromewebstore.google.com/detail/cts-sn-quickfill/eadefppnebkkoidiehagfbkppiahlioh?authuser=1&hl=en
+[Link to extension on chrome store (takes a while to udpate if I push code to it)](https://chromewebstore.google.com/detail/eadefppnebkkoidiehagfbkppiahlioh)
