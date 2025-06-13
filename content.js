@@ -25,7 +25,7 @@
     // The main setup function. It will be called only once the page is ready.
     const main = () => {
         let isApplyingDefaults = false; // Flag to prevent auto-open during form fill
-        let modalWasManuallyClosed = false; // Flag to prevent re-open after manual X close
+        let modalWasManuallyClosed = false; // Flag to prevent re-open after manual 'X' close
 
         const MODAL_HTML = `
             <div id="snu-modal-container" style="display: none;">
@@ -52,7 +52,7 @@
             </div>`;
         document.body.insertAdjacentHTML('beforeend', MODAL_HTML);
 
-        const modalContainer = document.getElementById('snu-modal-container'); // Renamed to avoid conflict in auto-open
+        const modalContainer = document.getElementById('snu-modal-container');
         const BLANK_ENTRY = '[Blank]';
         const fieldsConfig = {
             category: { isStatic: true, select: modalContainer.querySelector('#category-input'), defaultKey: 'snu_defaultCategory', staticOptions: [ { text: BLANK_ENTRY, value: BLANK_ENTRY }, { text: '-- None --', value: '' }, { text: 'Request', value: 'request' }, { text: 'Inquiry / Help', value: 'inquiry' }, { text: 'Software', value: 'software' }, { text: 'Hardware', value: 'hardware' }, { text: 'Network', value: 'network' }, { text: 'Database', value: 'database' }, { text: 'Phone', value: 'Phone' }, { text: 'Audio/Visual', value: 'Audio/Visual' }, { text: 'Facilities', value: 'Facilities' } ] },
@@ -69,37 +69,146 @@
             return frame ? frame.contentWindow.document : document;
         };
         
-        const removeEntry = (fieldName, optionText) => { const config = fieldsConfig[fieldName]; chrome.storage.sync.get(config.storageKey, r => { const o = (r[config.storageKey]||[]).filter(opt => opt !== optionText); chrome.storage.sync.set({[config.storageKey]: o}, ()=>populateDropdown(fieldName, o)); }); };
-        const populateDropdown = (fieldName, options) => {
+        const removeEntry = (fieldName, optionText) => { const config = fieldsConfig[fieldName]; chrome.storage.sync.get(config.storageKey, r => { const o = (r[config.storageKey]||[]).filter(opt => opt !== optionText); chrome.storage.sync.set({[config.storageKey]: o}, ()=>{
+            console.log(`SN QuickFill: removeEntry - Attempting to remove "${optionText}" from ${fieldName}. New list to save:`, JSON.stringify(o));
+            if (chrome.runtime.lastError) {
+                console.warn(`SN QuickFill: Error during storage.sync.set in removeEntry for ${fieldName}:`, chrome.runtime.lastError.message);
+                // Optionally, you might want to re-populate with the original list 'r[config.storageKey]' if the set failed,
+                // or at least not proceed with a potentially empty 'o'. For now, just log.
+                return; // Potentially stop if set failed
+            }
+            populateDropdown(fieldName, o); 
+        
+        }); }); };
+                const populateDropdown = (fieldName, options) => {
+            // Log options *before* clearing, to see if they were already empty
+            if (!options || options.length === 0) {
+                console.warn(`SN QuickFill: populateDropdown called for ${fieldName} with EMPTY or NO options. Current panel items: ${fieldsConfig[fieldName].panel.children.length}`);
+            }
+            // console.log(`SN QuickFill: populateDropdown called for ${fieldName} with options:`, JSON.stringify(options)); // Existing log
             const config = fieldsConfig[fieldName]; config.panel.innerHTML='';
-            ['[Blank]', ...options].forEach(optionText => { const i=document.createElement('div');i.className='dropdown-item';const t=document.createElement('span');t.textContent=optionText;i.appendChild(t);if(optionText !== '[Blank]'){const r=document.createElement('button');r.className='remove-item-btn';r.innerHTML='&times;';r.title=`Remove "${optionText}"`;r.addEventListener('click',e=>{e.stopPropagation();removeEntry(fieldName,optionText);});i.appendChild(r);} i.addEventListener('click', ()=>{config.input.value=(optionText==='[Blank]')?'':optionText;config.panel.classList.remove('show');}); config.panel.appendChild(i);});
+            ['[Blank]', ...options].forEach(optionText => { 
+                const itemDiv = document.createElement('div'); itemDiv.className='dropdown-item';
+                const textSpan = document.createElement('span'); textSpan.textContent=optionText; itemDiv.appendChild(textSpan);
+                if(optionText !== '[Blank]'){
+                    const removeBtn = document.createElement('button');removeBtn.className='remove-item-btn';removeBtn.innerHTML='&times;';removeBtn.title=`Remove "${optionText}"`;
+                    removeBtn.addEventListener('click',e=>{e.stopPropagation();removeEntry(fieldName,optionText);});
+                    itemDiv.appendChild(removeBtn);
+                } 
+                itemDiv.addEventListener('click', () => {
+                    config.input.value = (optionText === BLANK_ENTRY) ? '' : optionText;
+                    config.panel.classList.remove('show');
+                    // Manually dispatch an input event so listeners (like checkIfDefault) are triggered
+                    config.input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                }); 
+                config.panel.appendChild(itemDiv);
+            });
         };
-        const checkIfDefault = (fieldName) => { const config = fieldsConfig[fieldName]; const btn = modalContainer.querySelector(`.default-btn[data-field="${fieldName}"]`); if(!btn) return; const val = config.isStatic ? config.select.value : config.input.value; chrome.storage.sync.get(config.defaultKey, r => { btn.classList.toggle('is-default', r[config.defaultKey] !== undefined && val === r[config.defaultKey] && val !== '' && val !== '[Blank]'); }); };
+        const checkIfDefault = (fieldName) => { 
+            const config = fieldsConfig[fieldName]; 
+            const btn = modalContainer.querySelector(`.default-btn[data-field="${fieldName}"]`); 
+            if(!btn) return; 
+            
+            let currentFieldValue = config.isStatic ? config.select.value : config.input.value;
+            if (currentFieldValue === BLANK_ENTRY) { // Canonicalize BLANK_ENTRY from select to '' for comparison
+                currentFieldValue = ''; 
+            }
+
+            chrome.storage.sync.get(config.defaultKey, r => { 
+                const storedDefault = r[config.defaultKey]; // Stored default is already canonical ('') if set from BLANK_ENTRY
+                btn.classList.toggle('is-default', storedDefault !== undefined && currentFieldValue === storedDefault); 
+            }); 
+        };
         const loadDataForField = (fieldName) => {
             const config = fieldsConfig[fieldName]; chrome.storage.sync.get([config.defaultKey, config.storageKey].filter(Boolean), r => {
                 const defaultVal = r[config.defaultKey]; if(config.isStatic){config.select.innerHTML=''; config.staticOptions.forEach(opt=>{const o=document.createElement('option');o.value=opt.value;o.textContent=opt.text;config.select.appendChild(o);}); config.select.value=defaultVal||'[Blank]';}else{populateDropdown(fieldName,r[config.storageKey]||[]); config.input.value=defaultVal||'';}
                 checkIfDefault(fieldName);
             });
         };
-        const addEntry = (fieldName) => { const config = fieldsConfig[fieldName]; const newValue = config.input.value.trim(); if(newValue && newValue !== BLANK_ENTRY){chrome.storage.sync.get(config.storageKey,r=>{let o=r[config.storageKey]||[];if(!o.includes(newValue)){o.unshift(newValue);chrome.storage.sync.set({[config.storageKey]:o},()=>populateDropdown(fieldName,o));}});}};
-        const setDefault = (fieldName) => { const config = fieldsConfig[fieldName]; const v = config.isStatic ? config.select.value : config.input.value; chrome.storage.sync.set({[config.defaultKey]:v},()=>checkIfDefault(fieldName));};
+        const addEntry = (fieldName) => { 
+            const config = fieldsConfig[fieldName]; 
+            const newValue = config.input.value.trim(); 
+            if(newValue && newValue !== BLANK_ENTRY){
+                chrome.storage.sync.get(config.storageKey,r=>{
+                    let o=r[config.storageKey]||[];
+                    if(!o.includes(newValue)){
+                        o.unshift(newValue);
+                        console.log(`SN QuickFill: addEntry - Attempting to add "${newValue}" to ${fieldName}. New list to save:`, JSON.stringify(o));
+                        chrome.storage.sync.set({[config.storageKey]:o},()=>{
+                            if (chrome.runtime.lastError) {
+                                console.warn(`SN QuickFill: Error during storage.sync.set in addEntry for ${fieldName}:`, chrome.runtime.lastError.message);
+                                return; // Potentially stop if set failed
+                            }
+                            populateDropdown(fieldName,o)
+                        });
+                        config.input.value = newValue; // Ensure the input field reflects the newly added value
+                    }
+                });
+            }
+        };
+                const setDefault = (fieldName) => { 
+            const config = fieldsConfig[fieldName]; 
+            let valueToSet = config.isStatic ? config.select.value : config.input.value;
+            if (valueToSet === BLANK_ENTRY) { // Canonicalize BLANK_ENTRY from select to '' for storage
+                valueToSet = '';
+            }
+            chrome.storage.sync.set({[config.defaultKey]: valueToSet}, () => {
+                if (chrome.runtime.lastError) {
+                    console.warn(`SN QuickFill: Error during storage.sync.set in setDefault for ${fieldName}:`, chrome.runtime.lastError.message);
+                }
+                checkIfDefault(fieldName)
+            });
+        };
+        
         const filterDropdown = (fieldName) => { const config = fieldsConfig[fieldName]; const f = config.input.value.toLowerCase(); Array.from(config.panel.children).forEach(i=>i.style.display=i.textContent.toLowerCase().includes(f)?'':'none');};
         const fillServiceNowForm = (data) => {
             const targetDoc = getTargetDoc();
             const idMap={'sys_display.incident.caller_id':data.caller,'incident.category':data.category,'sys_display.incident.cmdb_ci':data.configurationItem,'incident.contact_type':data.channel,'sys_display.incident.assignment_group':data.assignmentGroup,'sys_display.incident.assigned_to':data.assignedTo,'incident.state':data.state,'incident.short_description':data.shortDescription};
-            for(const id in idMap){const v=idMap[id];if(v==='[Blank]'||v===undefined||v===null)continue;const el=targetDoc.getElementById(id);if(el){el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));}}
+            
+            for(const id in idMap){
+                const v=idMap[id];
+                // Skip if value is blank, undefined, null, or an empty string (unless it's a deliberate blanking)
+                if(v === BLANK_ENTRY || v === undefined || v === null || (typeof v === 'string' && v.trim() === '' && v !== BLANK_ENTRY) ) {
+                    if (v === BLANK_ENTRY) { // If explicitly [Blank], try to clear the field
+                        const elToClear = targetDoc.getElementById(id);
+                        if (elToClear) {
+                            elToClear.value = '';
+                            elToClear.dispatchEvent(new Event('input',{bubbles:true, cancelable: true}));
+                            elToClear.dispatchEvent(new Event('change',{bubbles:true, cancelable: true}));
+                            elToClear.dispatchEvent(new Event('blur',{bubbles:false, cancelable: true}));
+                        }
+                    }
+                    continue;
+                }
+
+                const el=targetDoc.getElementById(id);
+                if(el){
+                    if (id.startsWith('sys_display.')) { // Special handling for ServiceNow reference fields
+                        el.focus(); 
+                        el.value = v;
+                        el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                        // Simulating Enter can sometimes help trigger reference field lookups
+                        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, charCode: 13, keyCode: 13, which: 13 }));
+                        el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, charCode: 13, keyCode: 13, which: 13 }));
+                        el.dispatchEvent(new Event('blur', { bubbles: false, cancelable: true }));
+                    } else { // For select lists, textareas, or other simple inputs
+                        el.value = v;
+                        el.dispatchEvent(new Event('input',{bubbles:true, cancelable: true}));
+                        el.dispatchEvent(new Event('change',{bubbles:true, cancelable: true}));
+                        el.dispatchEvent(new Event('blur',{bubbles:false, cancelable: true}));
+                    }
+                } else {
+                    console.warn(`SN QuickFill: Element with ID "${id}" not found in target document.`);
+                }
+            }
         };
-        const applyAllDefaults = () => { chrome.storage.sync.get(Object.values(fieldsConfig).map(c=>c.defaultKey),d=>{const data={caller:d.snu_defaultCaller,category:d.snu_defaultCategory,configurationItem:d.snu_defaultConfigItem,channel:d.snu_defaultChannel,assignmentGroup:d.snu_defaultAssignmentGroup,assignedTo:d.snu_defaultAssignedTo,state:d.snu_defaultState,shortDescription:''};fillServiceNowForm(data);});};
-        const newApplyAllDefaults = () => { // Renamed to avoid conflict if old one is still referenced
-            console.log("SN QuickFill: applyAllDefaults called. Setting isApplyingDefaults=true.");
+        const newApplyAllDefaults = () => {
             isApplyingDefaults = true;
             chrome.storage.sync.get(Object.values(fieldsConfig).map(c => c.defaultKey), defaults => {
                 const data = { caller: defaults.snu_defaultCaller, category: defaults.snu_defaultCategory, configurationItem: defaults.snu_defaultConfigItem, channel: defaults.snu_defaultChannel, assignmentGroup: defaults.snu_defaultAssignmentGroup, assignedTo: defaults.snu_defaultAssignedTo, state: defaults.snu_defaultState, shortDescription: '' };
-                console.log("SN QuickFill: applyAllDefaults - got defaults, calling fillServiceNowForm.");
                 fillServiceNowForm(data);
-                console.log("SN QuickFill: applyAllDefaults - fillServiceNowForm finished. Scheduling flag reset.");
                 setTimeout(() => {
-                    console.log("SN QuickFill: applyAllDefaults - Resetting isApplyingDefaults=false.");
                     isApplyingDefaults = false;
                 }, 750); // Further increased timeout
             });
@@ -109,7 +218,6 @@
             if (iframeDoc.getElementById('snu-quickfill-btn')) {
                 return; // Button already injected
             }
-            console.log("SN QuickFill: Injecting 'Quickfill Defaults' button logic.");
             const container = iframeDoc.createElement('div');
             container.id = 'snu-quickfill-btn-container';
             container.style.display = 'inline-block';
@@ -123,14 +231,12 @@
             button.style.setProperty('color', 'white', 'important');
             button.style.setProperty('border', 'none', 'important'); // Making border !important too
             // Consider adding ServiceNow's button classes for consistent styling
-            // e.g., button.classList.add('form_action_button', 'header');
-            button.addEventListener('click', newApplyAllDefaults); // Use the new version with flag logic
+            button.addEventListener('click', newApplyAllDefaults);
 
             container.appendChild(button);
             // Insert the container with your button *before* the anchorElement
             if (anchorElement.parentNode) {
                 anchorElement.parentNode.insertBefore(container, anchorElement);
-                console.log("SN QuickFill: 'Quickfill Defaults' button injected before anchor element.", container);
             } else {
                 console.warn("SN QuickFill: Anchor element for 'Quickfill Defaults' button has no parent. Button not injected.");
             }
@@ -165,23 +271,18 @@
         modalContainer.querySelector('#snu-close-btn').addEventListener('click',()=>{
             modalContainer.style.display='none';
             modalWasManuallyClosed = true; // Set flag when X is clicked
-            console.log("SN QuickFill: Modal closed with X. modalWasManuallyClosed=true");
         });
         modalContainer.querySelector('#snu-fill-btn').addEventListener('click', () => {
-            console.log("SN QuickFill: Fill & Close clicked. Setting isApplyingDefaults=true.");
             isApplyingDefaults = true;
             const dataToFill = {};
             for (const fieldName in fieldsConfig) dataToFill[fieldName] = fieldsConfig[fieldName].isStatic ? fieldsConfig[fieldName].select.value : fieldsConfig[fieldName].input.value;
             dataToFill.shortDescription = modalContainer.querySelector('#short-description-input').value;
             fillServiceNowForm(dataToFill);
             modalContainer.style.display = 'none';
-            modalWasManuallyClosed = true; // Treat "Fill & Close" like a manual close for re-open prevention
-            console.log("SN QuickFill: Fill & Close - Modal hidden. modalWasManuallyClosed=true");
-            console.log("SN QuickFill: Fill & Close - fillServiceNowForm finished. Scheduling flag reset.");
+            modalWasManuallyClosed = true; // Treat "Fill & Close" like a manual close for re-open prevention purposes
             setTimeout(() => {
-                console.log("SN QuickFill: Fill & Close - Resetting isApplyingDefaults=false.");
                 isApplyingDefaults = false;
-            }, 750); // Further increased timeout
+            }, 750); // Timeout to allow ServiceNow to process changes before re-evaluating auto-open
         });
         const autoToggle=modalContainer.querySelector('#snu-auto-open-toggle');
         autoToggle.addEventListener('change',e=>chrome.storage.sync.set({'snu_auto_open':e.target.checked}));
@@ -212,7 +313,6 @@
                 console.warn("SN QuickFill: processIframeContent called with no document.");
                 return;
             }
-            console.log("SN QuickFill: Processing iframe content.");
             checkForNewRecordAndOpen(currentIframeDoc);
             tryInjectOnPageButton(currentIframeDoc);
         };
@@ -220,7 +320,7 @@
             const checkForNewRecordAndOpen = (currentIframeDoc) => {
                 if (modalWasManuallyClosed) {
                     console.log("SN QuickFill: checkForNewRecordAndOpen - modalWasManuallyClosed is TRUE. Skipping modal open logic.");
-                    // We don't reset it here; it gets reset on iframe load or when modal is programmatically opened.
+                    // This flag is reset on iframe load or when the modal is programmatically opened.
                     return;
                 }
 
@@ -228,16 +328,13 @@
                     console.log("SN QuickFill: checkForNewRecordAndOpen - isApplyingDefaults is TRUE. Skipping modal open logic.");
                     return;
                 }
-                // console.log("SN QuickFill: checkForNewRecordAndOpen - isApplyingDefaults is FALSE. Proceeding.");
 
                 // Don't show modal if the document/tab is not focused
                 if (!document.hasFocus()) {
-                    // console.log("SN QuickFill: checkForNewRecordAndOpen - Document does not have focus, skipping modal display.");
                     return;
                 }
-                // console.log("SN QuickFill: checkForNewRecordAndOpen - Document has focus.");
 
-                // More explicit and detailed guard against chrome.storage.sync being unavailable
+                // Guard against chrome.storage.sync being unavailable, e.g., if extension context is invalidated
                 if (typeof chrome === 'undefined') {
                     console.warn("SN QuickFill: 'chrome' object is undefined. Cannot access storage. Skipping auto-open check.");
                     return;
@@ -259,48 +356,37 @@
                     }
 
                     const autoOpenEnabled = !!settingResult.snu_auto_open;
-                    // console.log(`SN QuickFill: checkForNewRecordAndOpen - Auto-open setting is: ${autoOpenEnabled}`);
                     if (!settingResult.snu_auto_open) {
                         return;
                     }
 
                     const modal = document.getElementById('snu-modal-container');
                     if (modal && modal.style.display === 'flex') {
-                        // console.log("SN QuickFill: checkForNewRecordAndOpen - Modal already open, skipping.");
                         return;
                     }
-                    // console.log("SN QuickFill: checkForNewRecordAndOpen - Modal is not already open.");
 
                     waitForElement('h1.form_header div', currentIframeDoc, (headerDiv) => {
                         const headerText = headerDiv ? headerDiv.textContent.trim().toLowerCase() : "";
-                        // console.log(`SN QuickFill: checkForNewRecordAndOpen - Found header text: "${headerText}"`);
                         if (headerText === "new record") {
-                            console.log("SN QuickFill: checkForNewRecordAndOpen - 'New Record' text matched. Conditions met. Opening modal.");
                             if (modal) {
                                 modal.style.display = 'flex';
                                 modalWasManuallyClosed = false; // Reset flag as modal is now programmatically opened
                             } else {
                                 console.error("SN QuickFill: checkForNewRecordAndOpen - Modal element not found when trying to open!");
                             }
-                        } else {
-                            // console.log("SN QuickFill: checkForNewRecordAndOpen - 'New Record' text did NOT match.");
                         }
                     }, "'New Record' header (check for auto-open)", true);
                 });
             };
 
         waitForElement('#gsft_main', document, (iframeElement) => {
-            console.log("SN QuickFill: Monitoring - Found #gsft_main iframe.", iframeElement);
-
             const setupMutationObserver = (docToObserve) => {
                 if (!docToObserve) return;
                 waitForElement('body', docToObserve, (iframeBody) => {
                     if (iframeObserver) {
                         iframeObserver.disconnect();
-                        console.log("SN QuickFill: Disconnected old MutationObserver.");
                     }
                     iframeObserver = new MutationObserver(() => {
-                        // console.log("SN QuickFill: iframe body mutation detected.");
                         // Get the latest document reference from the iframe contentWindow
                         const latestIframeDoc = iframeElement.contentWindow ? iframeElement.contentWindow.document : null;
                         if (latestIframeDoc) {
@@ -308,7 +394,6 @@
                         }
                     });
                     iframeObserver.observe(iframeBody, { childList: true, subtree: true });
-                    console.log("SN QuickFill: MutationObserver attached to iframe body.");
                 }, "iframe body for MutationObserver", true);
             };
 
@@ -327,8 +412,7 @@
                 const loadedIframeDoc = iframeElement.contentWindow ? iframeElement.contentWindow.document : null;
                 if (loadedIframeDoc) {
                     processIframeContent(loadedIframeDoc);
-                    modalWasManuallyClosed = false; // Reset flag on iframe load
-                    console.log("SN QuickFill: iframe 'load' event. modalWasManuallyClosed reset to false.");
+                    modalWasManuallyClosed = false; // Reset manual close flag on a full iframe load
                     setupMutationObserver(loadedIframeDoc); // Re-setup observer on new document's body
                 }
             });
@@ -337,7 +421,6 @@
         
         window.addEventListener('beforeunload', () => {
             if (iframeObserver) { // Check the observer declared in the outer scope
-                console.log("SN QuickFill: Window unloading. Disconnecting any active iframe observer.");
                 iframeObserver.disconnect();
                 iframeObserver = null;
             }
