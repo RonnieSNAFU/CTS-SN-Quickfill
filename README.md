@@ -3,7 +3,7 @@
 ## Overview
 
 CTS SN Quickfill is a Chrome extension designed to streamline and accelerate the process of completing forms and records within ServiceNow instances. It allows users to save, manage, and quickly apply predefined default values and custom entries to common fields, significantly reducing manual data entry and improving efficiency.
-### I created this before I knew ServiceNow Templates were a thing but still like my version more. The use case for this over templates is if you need to quickly adjust fields you input and want to do so quickly.
+### <u>I created this before I knew ServiceNow Templates were a thing but still like my version more. The use case for this over templates is if you need to quickly adjust fields you input and want to do so quickly.</u>
 
 ## Features
 
