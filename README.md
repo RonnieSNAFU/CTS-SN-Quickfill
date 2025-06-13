@@ -22,14 +22,11 @@ Here's a look at the CTS SN Quickfill extension:
 **1. The Main Quickfill Modal:**
    *Description: The main pop-up modal with various fields.*
    ![image](https://github.com/user-attachments/assets/d3084ac3-a8c7-470c-92dd-01da387f0366)
-![image](https://github.com/user-attachments/assets/d3084ac3-a8c7-470c-92dd-01da387f0366)
 
 
 **2. Custom Dropdown for a Field (e.g., Caller):**
    *Description: Expanded custom dropdown with saved entries and the remove button.*
 ![chrome_399cH3dbpf](https://github.com/user-attachments/assets/ad9684cd-e91c-404c-8eef-80210c100ac2)
-![chrome_399cH3dbpf](https://github.com/user-attachments/assets/ad9684cd-e91c-404c-8eef-80210c100ac2)
-![chrome_PBBFKvSgcn](https://github.com/user-attachments/assets/9733950d-4c91-449d-bba9-11746a8a608b)
 ![chrome_PBBFKvSgcn](https://github.com/user-attachments/assets/9733950d-4c91-449d-bba9-11746a8a608b)
 
   
@@ -37,19 +34,16 @@ Here's a look at the CTS SN Quickfill extension:
 **3. "Set as Default" Button Highlighted:**
    *Description: Shows a field with a value set and the "Set as Default" button highlighted or in its 'is-default' state.*
 ![chrome_Ux2ChfsA6s](https://github.com/user-attachments/assets/fdca851b-84c3-4df5-902e-4f71a09d45d7)
-![chrome_Ux2ChfsA6s](https://github.com/user-attachments/assets/fdca851b-84c3-4df5-902e-4f71a09d45d7)
 
 
 **4. On-Page "Quickfill Defaults" Button:**
    *Description: Shows the green "Quickfill Defaults" button on a ServiceNow form.*
-![image](https://github.com/user-attachments/assets/2c52b9ab-7d82-40e0-b9bd-c06ab45aedb9)
 ![image](https://github.com/user-attachments/assets/2c52b9ab-7d82-40e0-b9bd-c06ab45aedb9)
 
 
 **5. Auto-Open Toggle Switch:**
    *Description: Shows the "Auto-Open on New" toggle switch in the modal.*
 
-![image](https://github.com/user-attachments/assets/85eb8396-4032-460e-8cf1-c19c0ccbe5a0)
 ![image](https://github.com/user-attachments/assets/85eb8396-4032-460e-8cf1-c19c0ccbe5a0)
 
 
